@@ -35,6 +35,7 @@ void handleRoot() {
 
 void handleData() {
     String json = "{ \"rot\": [" + String(rot[0]) + ", " + String(rot[1]) + "] }";
+    server.sendHeader("Access-Control-Allow-Origin", "http://localhost");
     server.send(200, "application/json", json);
 }
 
