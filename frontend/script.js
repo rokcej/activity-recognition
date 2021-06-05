@@ -1,9 +1,5 @@
-<!DOCTYPE html><html></html>
-<head>
-	<title>Home (local)</title>
-	<meta charset="UTF-8">
-	<style></style>
-	<script>
+const DATA_URL = "http://192.168.100.33/data";
+
 const vsSource = `#version 300 es
 	in vec3 aPos;
 	in vec3 aNorm;
@@ -13,7 +9,7 @@ const vsSource = `#version 300 es
 	out vec3 vPos;
 	out vec3 vNorm;
 
-	vec3 scale = vec3(1.0, 0.2, 1.0);
+	vec3 scale = vec3(0.8, 0.1, 1.0);
 
 	void main() {
 		vec4 pos = uMMat * vec4((scale * aPos), 1.0);
@@ -25,31 +21,54 @@ const vsSource = `#version 300 es
 
 const fsSource = `#version 300 es
 	precision highp float;
+
+	#define NUM_LIGHTS 2
+
+	struct Light {
+		vec3 color;
+		vec3 pos;
+		float intensity;
+		float ambient;
+	};
+
 	in vec3 vPos;
 	in vec3 vNorm;
 	uniform vec3 uCameraPos;
 
 	out vec4 oColor;
 
-	vec3 color = vec3(1.0, 0.8, 0.5);
-	vec3 lightPos = vec3(-2.0, 5.0, 1.0);
-	float intensity = 1.0;
+	Light lights[NUM_LIGHTS] = Light[NUM_LIGHTS](
+		Light(
+			vec3(1.0, 0.8, 0.5),
+			vec3(-2.0, 5.0, -1.0),
+			1.0, 0.3
+		),
+		Light(
+			vec3(1.0, 0.6, 0.375),
+			vec3(3.0, -6.0, -2.0),
+			0.8, 0.0
+		)
+	);
+
 	float shininess = 16.0;
-	float ambient = 0.3;
 	vec2 attenuation = vec2(0.1, 0.001);
 
 	void main() {
-		// Blinn-Phong reflection model
-		vec3 lightDir = lightPos - vPos;
-		float dist = length(lightDir);
-		lightDir = normalize(lightDir);
-		vec3 viewDir  = normalize(uCameraPos - vPos);
-		vec3 halfDir  = normalize(lightDir + viewDir);
+		vec3 color = vec3(0.0);
+		for (int i = 0; i < NUM_LIGHTS; ++i) {
+			// Blinn-Phong reflection model
+			vec3 lightDir = lights[i].pos - vPos;
+			float dist = length(lightDir);
+			lightDir = normalize(lightDir);
+			vec3 viewDir  = normalize(uCameraPos - vPos);
+			vec3 halfDir  = normalize(lightDir + viewDir);
 
-		float specular = pow(max(dot(vNorm, halfDir), 0.0), shininess);
-		float diffuse = max(dot(vNorm, lightDir), 0.0);
+			float specular = pow(max(dot(vNorm, halfDir), 0.0), shininess);
+			float diffuse = max(dot(vNorm, lightDir), 0.0);
 
-		oColor = vec4((ambient + (diffuse + specular) * (intensity / (1.0 + dist * attenuation.x + dist * dist * attenuation.y))) * color, 1.0);
+			color += (lights[i].ambient + (diffuse + specular) * (lights[i].intensity / (1.0 + dist * attenuation.x + dist * dist * attenuation.y))) * lights[i].color;
+		}
+		oColor = vec4(color, 1.0);
 	}	
 `;
 
@@ -78,6 +97,16 @@ function createProgram(gl, vertexShader, fragmentShader) {
 	return program;
 }
 
+// WebGL matrices are column-major
+
+function normalizeVector(v) {
+	const invLen = 1.0 / Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+	v[0] *= invLen;
+	v[1] *= invLen;
+	v[2] *= invLen;
+	return v;
+}
+
 function perspectiveMatrix(fovyDeg, aspect, near, far) {
 	const fovyRad = fovyDeg * Math.PI / 180.0;
 	const f = 1.0 / Math.tan(fovyRad * 0.5);
@@ -87,6 +116,42 @@ function perspectiveMatrix(fovyDeg, aspect, near, far) {
 		0,          f,                         0,  0,
 		0,          0,   (near + far) * rangeInv, -1,
 		0,          0, 2 * near * far * rangeInv,  0
+	]);
+}
+
+function lookAtMatrix(eye, center, up) {
+	const z = [ // eye - center
+		eye[0] - center[0],
+		eye[1] - center[1],
+		eye[2] - center[2]
+	]
+	normalizeVector(z);
+
+	const x = [ // vectorProduct(up, z)
+		up[1] * z[2] - up[2] * z[1],
+		up[2] * z[0] - up[0] * z[2],
+		up[0] * z[1] - up[1] * z[0]
+	]
+	normalizeVector(x);
+
+	const y = [ // vectorProduct(z, x)
+		z[1] * x[2] - z[2] * x[1],
+		z[2] * x[0] - z[0] * x[2],
+		z[0] * x[1] - z[1] * x[0]
+	]
+	normalizeVector(y);
+
+	const d = [ // dotProduct({x, y, z}, -eye)
+		-(x[0] * eye[0] + x[1] * eye[1] + x[2] * eye[2]),
+		-(y[0] * eye[0] + y[1] * eye[1] + y[2] * eye[2]),
+		-(z[0] * eye[0] + z[1] * eye[1] + z[2] * eye[2])
+	]
+
+	return new Float32Array([
+		x[0], y[0], z[0], 0,
+		x[1], y[1], z[1], 0,
+		x[2], y[2], z[2], 0,
+		d[0], d[1], d[2], 1
 	]);
 }
 
@@ -193,6 +258,7 @@ function main() {
 	}
 
 	const vertices = [
+		// Position			// Normal
 		// Front
 		-1.0, -1.0, +1.0,	0.0, 0.0, +1.0,
 		+1.0, -1.0, +1.0,	0.0, 0.0, +1.0,
@@ -233,26 +299,6 @@ function main() {
 		16, 17, 18, 16, 18, 19, // Right
 		20, 21, 22, 20, 22, 23, // Left
 	]
-	
-	// const positions = [
-	// 	-1.0, -1.0, -1.0,
-	// 	-1.0, -1.0, +1.0,
-	// 	-1.0, +1.0, -1.0,
-	// 	-1.0, +1.0, +1.0,
-	// 	+1.0, -1.0, -1.0,
-	// 	+1.0, -1.0, +1.0,
-	// 	+1.0, +1.0, -1.0,
-	// 	+1.0, +1.0, +1.0,
-	// ];
-
-	// const indices = [
-	// 	0, 2, 1, 1, 2, 3, // Back
-	// 	4, 5, 6, 6, 5, 7, // Front
-	// 	0, 1, 4, 4, 1, 5, // Bottom
-	// 	6, 7, 2, 2, 7, 3, // Top
-	// 	0, 4, 2, 2, 4, 6, // Left
-	// 	5, 1, 7, 7, 1, 3  // Right
-	// ];
 
 	const vbo = gl.createBuffer();
 	gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
@@ -269,17 +315,21 @@ function main() {
 	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ebo);
 	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint8Array(indices), gl.STATIC_DRAW);
 
-	const cameraPos = new Float32Array([0, 0, 3]);
+	const camera = {
+		pos: new Float32Array([0, 0.8, 2.5]),
+		center: new Float32Array([0, 0, 0]),
+		up: new Float32Array([0, 1, 0]),
+	};
 
 	const projMat = perspectiveMatrix(60, canvas.width / canvas.height, 0.1, 100);
-	const viewMat = translationMatrix(-cameraPos[0], -cameraPos[1], -cameraPos[2]);
+	const viewMat = lookAtMatrix(camera.pos, camera.center, camera.up)
 	const pvMat = multiplyMatrix(projMat, viewMat, identityMatrix(),);
 
 	gl.enable(gl.DEPTH_TEST);
 	gl.depthFunc(gl.LEQUAL);
 
 	function update() {
-		fetch("http://192.168.100.33/data")
+		fetch(DATA_URL)
 			.then(response => response.json())
 			.then(data => requestAnimationFrame(() => { draw(data) }));
 	}
@@ -294,7 +344,7 @@ function main() {
 
 		const modelMat = multiplyMatrix(rotationXMatrix(data.rot[0] * Math.PI / 180), rotationZMatrix(-data.rot[1] * Math.PI / 180))
 
-		gl.uniform3fv(uniforms["uCameraPos"], cameraPos);
+		gl.uniform3fv(uniforms["uCameraPos"], camera.pos);
 		gl.uniformMatrix4fv(uniforms["uPVMat"], false, pvMat);
 		gl.uniformMatrix4fv(uniforms["uMMat"], false, modelMat);
 
@@ -308,12 +358,3 @@ function main() {
 }
 
 document.addEventListener("DOMContentLoaded", main);
-	</script>
-</head>
-<body>
-	<h2>Welcome to ESP8266</h2>
-    <p>Uptime: </p>
-    <p>User agent: </p>
-	<canvas id="canvas" width="1280" height="720"></canvas>
-</body>
-</html>

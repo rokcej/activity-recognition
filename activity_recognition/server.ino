@@ -1,15 +1,16 @@
 #include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h>
+#include "frontend.h"
 
 ESP8266WebServer server(80);
 
 // Construct HTML string
 String getHTML(String head, String body) {
     String style = "body, html { font-family: sans-serif; }";
-    return "<!DOCTYPE html><html>"
-        "<head>" + head + "<meta charset=\"UTF-8\"><style>" + style + "</style></head>"
-        "<body>" + body + "</body>"
-        "</html>";
+    return "<!DOCTYPE html>\n<html>\n"
+        "<head>\n" + head + "<meta charset=\"UTF-8\">\n<style>" + style + "</style>\n</head>\n"
+        "<body>\n" + body + "</body>\n"
+        "</html>\n";
 }
 
 // Root page can be accessed only if authentication is ok
@@ -26,11 +27,18 @@ void handleRoot() {
 
     String userAgent = server.header("User-Agent");
     
-    String body = "<h2>Welcome to ESP8266</h2>"
-        "<p>Uptime: " + uptimeStr + "</p>"
-        "<p>User agent: " + userAgent + "</p>";
-    String html = getHTML("<title>Home</title>", body);
+    String body = "<h2>Welcome to ESP8266</h2>\n"
+        "<p>Uptime: " + uptimeStr + "</p>\n"
+        "<p>User agent: " + userAgent + "</p>\n"
+        "<canvas id=\"canvas\" width=\"960\" height=\"540\"></canvas>\n";
+    String head = "<title>Home</title>\n"
+     "<script type=\"text/javascript\" src=\"script.js\"></script>\n";
+    String html = getHTML(head, body);
     server.send(200, "text/html", html);
+}
+
+void handleScript() {
+    server.send(200, "application/javascript", frontend_script);
 }
 
 void handleData() {
@@ -40,8 +48,8 @@ void handleData() {
 }
 
 void handleNotFound() {
-    String body ="<h2>404 - Page not found</h2>"
-        "<p>Click <a href=\"/\">here</a> to go to the main page</p>";
+    String body ="<h2>404 - Page not found</h2>\n"
+        "<p>Click <a href=\"/\">here</a> to go to the main page</p>\n";
     String html = getHTML("<title>Page not found</title>", body);
     server.send(404, "text/html", html);
 }
@@ -77,6 +85,7 @@ void setupServer() {
 
     server.on("/", handleRoot);
     server.on("/data", handleData);
+    server.on("/script.js", handleScript);
     server.onNotFound(handleNotFound);
 
     // Headers to track

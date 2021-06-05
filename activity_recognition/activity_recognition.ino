@@ -7,6 +7,7 @@
 #define NETWORK_MODE 1 // Access point = 0, Station = 1
 
 // MPU-9250
+#define I2C_ADD_PCF 0x20 // PCF8574AN I2C Address
 #define I2C_ADD_MPU 0x68 // MPU-9250 I2C Address
 #define ACCEL_XOUT_H 0x3B
 #define GYRO_XOUT_H 0x43
@@ -22,10 +23,12 @@ const float ALPHA = TIME_CONSTANT / (TIME_CONSTANT + DT);
 
 
 // Global variables
-Ticker ticker;
+Ticker tickerMain;
+Ticker tickerLed;
 float rot[2] = { 0.f };
 float acc_err[3] = { 0.f };
 float gyro_err[3] = { 0.f };
+int led_count = 0;
 
 
 
@@ -35,6 +38,15 @@ void loopServer();
 
 float rad2deg(float angle) {
     return angle * 180.f / M_PI;                                
+}
+
+void writeLed(int count) {
+    uint8_t val = 0;
+    for (int i = 0; i < count; ++i)
+        val |= 1 << i;
+    Wire.beginTransmission (I2C_ADD_PCF);
+    Wire.write(~val);
+    Wire.endTransmission();
 }
 
 void calibrate() {
@@ -47,6 +59,7 @@ void calibrate() {
   int samples = 300;
   int frequency = 100;
   for (int i = 0; i < samples; ++i) {
+    
     float acc[3], ang_vel[3];
     readAcc(acc);
     readGyro(ang_vel);
@@ -92,7 +105,12 @@ void readGyro(float ang_vel[3]) {
   }
 }
 
-void updateAcc() {
+void updateLed() {
+    led_count = led_count % 4 + 1;
+    writeLed(led_count);
+}
+
+void updateMain() {
   float acc[3], ang_vel[3];
   readAcc(acc);
   readGyro(ang_vel);
@@ -106,21 +124,8 @@ void updateAcc() {
     rad2deg(atan2f(-acc[0], sqrtf(acc[1] * acc[1] + acc[2] * acc[2]))) // Pitch
   };
 
-
   for (int i = 0; i < 2; ++i)
     rot[i] = ALPHA * (rot[i] + ang_vel[i] * DT) + (1.f - ALPHA) * (rot_acc[i]);
-  
-//  Serial.print(acc[0]);
-//  Serial.print(", ");
-//  Serial.print(acc[1]);
-//  Serial.print(", ");
-//  Serial.print(acc[2]);
-//  Serial.println();
-
-//  Serial.print("Roll: ");
-//  Serial.print(rot[0]);
-//  Serial.print(", Pitch: ");
-//  Serial.println(rot[1]);
 }
 
 void setup() {
@@ -135,11 +140,17 @@ void setup() {
   Wire.begin(12, 14); // SDA = 12, SCL = 14
   Wire.setClock(100000); // 100kHz
 
+  tickerLed.attach_ms(500, updateLed); // Start loading animation
+
   // Init server
   setupServer();
 
+  // Run activity recognition
   calibrate();
-  ticker.attach_ms(1000 / FREQUENCY, updateAcc);
+  tickerMain.attach_ms(1000 / FREQUENCY, updateMain);
+  
+  tickerLed.detach(); // Stop loading animation
+  writeLed(0);
 }
 
 void loop() {
