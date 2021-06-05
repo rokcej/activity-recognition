@@ -1,0 +1,309 @@
+<!DOCTYPE html><html></html>
+<head>
+	<title>Home (local)</title>
+	<meta charset="UTF-8">
+	<style></style>
+	<script>
+const vsSource = `#version 300 es
+	in vec3 aPos;
+	in vec3 aNorm;
+	uniform mat4 uPVMat;
+	uniform mat4 uMMat;
+
+	out vec3 vPos;
+	out vec3 vNorm;
+
+	vec3 scale = vec3(1.0, 0.2, 1.0);
+
+	void main() {
+		vec4 pos = uMMat * vec4((scale * aPos), 1.0);
+		gl_Position = uPVMat * pos;
+		vPos = vec3(pos);
+		vNorm = mat3(transpose(inverse(uMMat))) * aNorm;
+	}
+`;
+
+const fsSource = `#version 300 es
+	precision highp float;
+	in vec3 vPos;
+	in vec3 vNorm;
+	uniform vec3 uCameraPos;
+
+	out vec4 oColor;
+
+	vec3 color = vec3(1.0, 0.8, 0.5);
+	vec3 lightPos = vec3(-2.0, 5.0, 1.0);
+	float intensity = 1.0;
+	float shininess = 16.0;
+	float ambient = 0.3;
+	vec2 attenuation = vec2(0.1, 0.001);
+
+	void main() {
+		// Blinn-Phong reflection model
+		vec3 lightDir = lightPos - vPos;
+		float dist = length(lightDir);
+		lightDir = normalize(lightDir);
+		vec3 viewDir  = normalize(uCameraPos - vPos);
+		vec3 halfDir  = normalize(lightDir + viewDir);
+
+		float specular = pow(max(dot(vNorm, halfDir), 0.0), shininess);
+		float diffuse = max(dot(vNorm, lightDir), 0.0);
+
+		oColor = vec4((ambient + (diffuse + specular) * (intensity / (1.0 + dist * attenuation.x + dist * dist * attenuation.y))) * color, 1.0);
+	}	
+`;
+
+function createShader(gl, type, source) {
+	const shader = gl.createShader(type);
+	gl.shaderSource(shader, source);
+	gl.compileShader(shader);
+	if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+		console.log(gl.getShaderInfoLog(shader));
+		gl.deleteShader(shader)
+		return null;
+	}
+	return shader;
+}
+
+function createProgram(gl, vertexShader, fragmentShader) {
+	const program = gl.createProgram();
+	gl.attachShader(program, vertexShader);
+	gl.attachShader(program, fragmentShader);
+	gl.linkProgram(program);
+	if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+		console.log(gl.getProgramInfoLog(program));
+		gl.deleteProgram(program);
+		return null;
+	}
+	return program;
+}
+
+function perspectiveMatrix(fovyDeg, aspect, near, far) {
+	const fovyRad = fovyDeg * Math.PI / 180.0;
+	const f = 1.0 / Math.tan(fovyRad * 0.5);
+	const rangeInv = 1.0 / (near - far);
+	return new Float32Array([
+		f / aspect, 0,                         0,  0,
+		0,          f,                         0,  0,
+		0,          0,   (near + far) * rangeInv, -1,
+		0,          0, 2 * near * far * rangeInv,  0
+	]);
+}
+
+function rotationXMatrix(rad) {
+	const s = Math.sin(rad);
+	const c = Math.cos(rad);
+	return new Float32Array([
+		1, 0,  0, 0,
+		0, c, -s, 0,
+		0, s,  c, 0,
+		0, 0,  0, 1
+	]);
+}
+
+function rotationYMatrix(rad) {
+	const s = Math.sin(rad);
+	const c = Math.cos(rad);
+	return new Float32Array([
+		 c, 0, s, 0,
+		 0, 1, 0, 0,
+		-s, 0, c, 0,
+		 0, 0, 0, 1
+	]);
+}
+
+function rotationZMatrix(rad) {
+	const s = Math.sin(rad);
+	const c = Math.cos(rad);
+	return new Float32Array([
+		c, -s, 0, 0,
+		s,  c, 0, 0,
+		0,  0, 1, 0,
+		0,  0, 0, 1
+	]);
+}
+
+function scalingMatrix(sx, sy, sz) {
+	return new Float32Array([
+		sx, 0, 0, 0,
+		0, sy, 0, 0,
+		0, 0, sz, 0,
+		0, 0, 0, 1
+	]);
+}
+
+function translationMatrix(tx, ty, tz) {
+	return new Float32Array([
+		1, 0, 0, 0,
+		0, 1, 0, 0,
+		0, 0, 1, 0,
+		tx, ty, tz, 1
+	]);
+}
+
+function identityMatrix() {
+	return new Float32Array([
+		1, 0, 0, 0,
+		0, 1, 0, 0,
+		0, 0, 1, 0,
+		0, 0, 0, 1
+	]);
+}
+
+function muliplyMatrix(out, A, B) {
+	for (let i = 0; i < 4; ++i) {
+		for (let j = 0; j < 4; ++j) {
+			let sum = 0;
+			for (let k = 0; k < 4; ++k)
+				sum += A[k * 4 + i] * B[j * 4 + k];
+			out[j * 4 + i] = sum;
+		}
+	}
+	return out;
+}
+
+function main() {
+	const canvas = document.getElementById("canvas");
+	const gl = canvas.getContext("webgl2") || canvas.getContext("webgl");
+	if (!gl) {
+		console.log("Unable to initialize WebGL.");
+		return;
+	}
+
+	const vs = createShader(gl, gl.VERTEX_SHADER, vsSource);
+	const fs = createShader(gl, gl.FRAGMENT_SHADER, fsSource);
+	const prog = createProgram(gl, vs, fs);
+	if (!prog) {
+		console.log("Unable to create program.");
+		return;
+	}
+
+	const uniforms = {};
+	for (let i = 0; i < gl.getProgramParameter(prog, gl.ACTIVE_UNIFORMS); ++i) {
+		const info = gl.getActiveUniform(prog, i);
+		uniforms[info.name] = gl.getUniformLocation(prog, info.name);
+	}
+
+	const attribs = {};
+	for (let i = 0; i < gl.getProgramParameter(prog, gl.ACTIVE_ATTRIBUTES); ++i) {
+		const info = gl.getActiveAttrib(prog, i);
+		attribs[info.name] = gl.getAttribLocation(prog, info.name);
+	}
+
+	const vertices = [
+		// Front
+		-1.0, -1.0, +1.0,	0.0, 0.0, +1.0,
+		+1.0, -1.0, +1.0,	0.0, 0.0, +1.0,
+		+1.0, +1.0, +1.0,	0.0, 0.0, +1.0,
+		-1.0, +1.0, +1.0,	0.0, 0.0, +1.0,
+		// Back
+		-1.0, -1.0, -1.0,	0.0, 0.0, -1.0,
+		-1.0, +1.0, -1.0,	0.0, 0.0, -1.0,
+		+1.0, +1.0, -1.0,	0.0, 0.0, -1.0,
+		+1.0, -1.0, -1.0,	0.0, 0.0, -1.0,
+		// Top
+		-1.0, +1.0, -1.0,	0.0, +1.0, 0.0,
+		-1.0, +1.0, +1.0,	0.0, +1.0, 0.0,
+		+1.0, +1.0, +1.0,	0.0, +1.0, 0.0,
+		+1.0, +1.0, -1.0,	0.0, +1.0, 0.0,
+		// Bottom
+		-1.0, -1.0, -1.0,	0.0, -1.0, 0.0,
+		+1.0, -1.0, -1.0,	0.0, -1.0, 0.0,
+		+1.0, -1.0, +1.0,	0.0, -1.0, 0.0,
+		-1.0, -1.0, +1.0,	0.0, -1.0, 0.0,
+		// Right
+		+1.0, -1.0, -1.0,	+1.0, 0.0, 0.0,
+		+1.0, +1.0, -1.0,	+1.0, 0.0, 0.0,
+		+1.0, +1.0, +1.0,	+1.0, 0.0, 0.0,
+		+1.0, -1.0, +1.0,	+1.0, 0.0, 0.0,
+		// Left
+		-1.0, -1.0, -1.0,	-1.0, 0.0, 0.0,
+		-1.0, -1.0, +1.0,	-1.0, 0.0, 0.0,
+		-1.0, +1.0, +1.0,	-1.0, 0.0, 0.0,
+		-1.0, +1.0, -1.0,	-1.0, 0.0, 0.0,
+	];
+
+	const indices = [
+		0,  1,  2,  0,  2,  3,  // Front
+		4,  5,  6,  4,  6,  7,  // Back
+		8,  9,  10, 8,  10, 11, // Top
+		12, 13, 14, 12, 14, 15, // Bottom
+		16, 17, 18, 16, 18, 19, // Right
+		20, 21, 22, 20, 22, 23, // Left
+	]
+	
+	// const positions = [
+	// 	-1.0, -1.0, -1.0,
+	// 	-1.0, -1.0, +1.0,
+	// 	-1.0, +1.0, -1.0,
+	// 	-1.0, +1.0, +1.0,
+	// 	+1.0, -1.0, -1.0,
+	// 	+1.0, -1.0, +1.0,
+	// 	+1.0, +1.0, -1.0,
+	// 	+1.0, +1.0, +1.0,
+	// ];
+
+	// const indices = [
+	// 	0, 2, 1, 1, 2, 3, // Back
+	// 	4, 5, 6, 6, 5, 7, // Front
+	// 	0, 1, 4, 4, 1, 5, // Bottom
+	// 	6, 7, 2, 2, 7, 3, // Top
+	// 	0, 4, 2, 2, 4, 6, // Left
+	// 	5, 1, 7, 7, 1, 3  // Right
+	// ];
+	
+	const vbo = gl.createBuffer();
+	gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+
+	const vao = gl.createVertexArray();
+	gl.bindVertexArray(vao)
+	gl.enableVertexAttribArray(attribs["aPos"]);
+	gl.vertexAttribPointer(attribs["aPos"], 3, gl.FLOAT, false, 6 * 4, 0);
+	gl.enableVertexAttribArray(attribs["aNorm"]);
+	gl.vertexAttribPointer(attribs["aNorm"], 3, gl.FLOAT, false, 6 * 4, 3 * 4);
+
+	const ebo = gl.createBuffer();
+	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ebo);
+	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint8Array(indices), gl.STATIC_DRAW);
+
+	const cameraPos = new Float32Array([0, 0, 3]);
+
+	const projMat = perspectiveMatrix(60, canvas.width / canvas.height, 0.1, 100);
+	const viewMat = translationMatrix(-cameraPos[0], -cameraPos[1], -cameraPos[2]);
+	const pvMat = muliplyMatrix(identityMatrix(), projMat, viewMat);
+
+	gl.enable(gl.DEPTH_TEST);
+	gl.depthFunc(gl.LEQUAL);
+
+	function draw() {
+		gl.clearColor(0, 0, 0, 1);
+		gl.clearDepth(1.0);
+		gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+		gl.useProgram(prog);
+		gl.bindVertexArray(vao);
+
+		const modelMat = rotationXMatrix(performance.now() / 2000.0);
+
+		gl.uniform3fv(uniforms["uCameraPos"], cameraPos);
+		gl.uniformMatrix4fv(uniforms["uPVMat"], false, pvMat);
+		gl.uniformMatrix4fv(uniforms["uMMat"], false, modelMat);
+
+		gl.drawElements(gl.TRIANGLES, indices.length, gl.UNSIGNED_BYTE, 0)
+
+		requestAnimationFrame(draw);
+	}
+	requestAnimationFrame(draw);
+}
+
+document.addEventListener("DOMContentLoaded", main);
+	</script>
+</head>
+<body>
+	<h2>Welcome to ESP8266</h2>
+    <p>Uptime: </p>
+    <p>User agent: </p>
+	<canvas id="canvas" width="1280" height="720"></canvas>
+</body>
+</html>
