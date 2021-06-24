@@ -34,6 +34,8 @@ int led_count = 0;
 
 float acc_hist[3][HISTORY] = { 0.f };
 int   acc_i = 0;
+float acc_mean[3] = { 0.f };
+float acc_dev[3]  = { 0.f };
 
 
 // Function declarations
@@ -138,22 +140,21 @@ void updateMain() {
     acc_i = (acc_i + 1) % HISTORY; // Update history head index
 
     // Compute mean
-    float acc_mean[3];
+    float temp[3];
     for (int i = 0; i < 3; ++i) {
-        acc_mean[i] = 0.0;
+        temp[i] = 0.0;
         for (int j = 0; j < HISTORY; ++j)
-            acc_mean[i] += acc_hist[i][(acc_i + j) % HISTORY];
-        acc_mean[i] = acc_mean[i] / (float)HISTORY;
+            temp[i] += acc_hist[i][(acc_i + j) % HISTORY];
+        acc_mean[i] = temp[i] / (float)HISTORY;
     }
     // Compute std dev
-    float acc_dev[3];
     for (int i = 0; i < 3; ++i) {
-        acc_dev[i] = 0.0;
+        temp[i] = 0.0;
         for (int j = 0; j < HISTORY; ++j) {
             float err = acc_hist[i][(acc_i + j) % HISTORY] - acc_mean[i];
-            acc_dev[i] += err * err;
+            temp[i] += err * err;
         }
-        acc_dev[i] = sqrtf(acc_dev[i] / (float)HISTORY);
+        acc_dev[i] = sqrtf(temp[i] / (float)HISTORY);
     }
     
     for (int i = 0; i < 3; ++i) {

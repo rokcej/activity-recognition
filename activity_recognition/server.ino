@@ -47,6 +47,26 @@ void handleData() {
     server.send(200, "application/json", json);
 }
 
+void handleHistory() {
+    //String json = "{ \"rot\": [" + String(rot[0]) + ", " + String(rot[1]) + "] }";
+    String json = "{ "
+        "\"mean\": [" + String(acc_mean[0]) + ", " + String(acc_mean[1]) + ", " + String(acc_mean[2]) + "], "
+        "\"dev\": [" + String(acc_dev[0])  + ", " + String(acc_dev[1])  + ", " + String(acc_dev[2])  + "], "
+        "\"acc\": [";
+    for (int i = 0; i < 3; ++i) {
+        json += "[";
+        for (int j = 0; j < HISTORY; ++j) {
+            json += String(acc_hist[i][(acc_i + j) % HISTORY]);
+            if (j < HISTORY - 1) json += ", ";
+        }
+        json += "]";
+        if (i < 2) json += ", ";
+    }
+    json += "] }";
+    server.sendHeader("Access-Control-Allow-Origin", "http://localhost");
+    server.send(200, "application/json", json);
+}
+
 void handleNotFound() {
     String body ="<h2>404 - Page not found</h2>\n"
         "<p>Click <a href=\"/\">here</a> to go to the main page</p>\n";
@@ -85,6 +105,7 @@ void setupServer() {
 
     server.on("/", handleRoot);
     server.on("/data", handleData);
+    server.on("/history", handleHistory);
     server.on("/script.js", handleScript);
     server.onNotFound(handleNotFound);
 

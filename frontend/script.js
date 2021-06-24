@@ -1,4 +1,5 @@
 const DATA_URL = "http://192.168.100.33/data";
+const HISTORY_URL = "http://192.168.100.33/history";
 
 const vsSource = `#version 300 es
 	in vec3 aPos;
@@ -229,7 +230,7 @@ function multiplyMatrix(A, B, out) {
 	return out;
 }
 
-function main() {
+function initWebGL() {
 	const canvas = document.getElementById("canvas");
 	const gl = canvas.getContext("webgl2") || canvas.getContext("webgl");
 	if (!gl) {
@@ -355,6 +356,97 @@ function main() {
 	}
 	//requestAnimationFrame(draw);
 	update();
+}
+
+
+function initGraphs() {
+	const labels = [];
+	for (let i = 0; i < 210; ++i) {
+		let t = (200 - i) / 20;
+		labels.push(-t);
+	}
+	const data = {
+		labels: labels,
+		datasets: [
+			{
+				label: 'x-acceleration',
+				backgroundColor: 'rgb(255, 99, 132)',
+				borderColor: 'rgb(255, 99, 132)',
+				data: new Array(201)
+			}, {
+				label: 'y-acceleration',
+				backgroundColor: 'rgb(99, 255, 117)',
+				borderColor: 'rgb(99, 255, 117)',
+				data: new Array(201)
+			}, {
+				label: 'z-acceleration',
+				backgroundColor: 'rgb(99, 141, 255)',
+				borderColor: 'rgb(99, 141, 255)',
+				data: new Array(201)
+			}
+		]
+	};
+	const config = {
+		type: 'line',
+		data,
+		options: {
+			responsive: false,
+			showXLabels: 10,
+			scales: {
+				y: {
+					title: {
+						text: "acceleration [m/s^2]",
+						display: true
+					},
+					min: -10,
+					max: +10
+				},
+				x: {
+					title: {
+						text: "time [s]",
+						display: true
+					},
+					display: true,
+					ticks: {
+						maxTicksLimit: 11
+					}
+				}
+			},
+			elements: {
+				point: {
+					radius: 0
+				}
+			}
+		}
+	};
+	var myChart = new Chart(
+		document.getElementById('myChart'),
+		config
+	);
+
+	function getHistory() {
+		fetch(HISTORY_URL)
+			.then(response => response.json())
+			.then(json => requestAnimationFrame(() => { updateGraphs(json) }));
+	}
+
+	function updateGraphs(json) {
+		for (let i = 0; i < 3; ++i) {
+			let len = json["acc"][i].length;
+			data.datasets[i].data = data.datasets[i].data.slice(len).concat(json["acc"][i]);
+		}
+		
+		myChart.update()
+		setTimeout(getHistory, 100);
+	}
+
+	getHistory();
+}
+
+
+function main() {
+	initWebGL();
+	initGraphs();
 }
 
 document.addEventListener("DOMContentLoaded", main);
