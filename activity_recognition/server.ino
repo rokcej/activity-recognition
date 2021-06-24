@@ -6,7 +6,7 @@ ESP8266WebServer server(80);
 
 // Construct HTML string
 String getHTML(String head, String body) {
-    String style = "body, html { font-family: sans-serif; }";
+    String style = String(frontend_css);
     return "<!DOCTYPE html>\n<html>\n"
         "<head>\n" + head + "<meta charset=\"UTF-8\">\n<style>" + style + "</style>\n</head>\n"
         "<body>\n" + body + "</body>\n"
@@ -27,12 +27,16 @@ void handleRoot() {
 
     String userAgent = server.header("User-Agent");
     
-    String body = "<h2>Welcome to ESP8266</h2>\n"
-        "<p>Uptime: " + uptimeStr + "</p>\n"
-        "<p>User agent: " + userAgent + "</p>\n"
-        "<canvas id=\"canvas\" width=\"960\" height=\"540\"></canvas>\n";
+    String body = 
+        "<div class=\"header\">\n"
+        "    <h1>Welcome to ESP8266</h2>\n"
+        "    <p>Uptime: " + uptimeStr + "</p>\n"
+        "    <p>User agent: " + userAgent + "</p>\n"
+        "</div>\n" + String(frontend_body) + "\n";
+      
     String head = "<title>Home</title>\n"
-     "<script type=\"text/javascript\" src=\"script.js\"></script>\n";
+     "<script type=\"text/javascript\" src=\"script.js\"></script>\n"
+     "<script src=\"https://cdn.jsdelivr.net/npm/chart.js\"></script>\n";
     String html = getHTML(head, body);
     server.send(200, "text/html", html);
 }
