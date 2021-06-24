@@ -47,22 +47,28 @@ void handleData() {
     server.send(200, "application/json", json);
 }
 
-void handleHistory() {
-    //String json = "{ \"rot\": [" + String(rot[0]) + ", " + String(rot[1]) + "] }";
-    String json = "{ "
-        "\"mean\": [" + String(acc_mean[0]) + ", " + String(acc_mean[1]) + ", " + String(acc_mean[2]) + "], "
-        "\"dev\": [" + String(acc_dev[0])  + ", " + String(acc_dev[1])  + ", " + String(acc_dev[2])  + "], "
-        "\"acc\": [";
-    for (int i = 0; i < 3; ++i) {
+String history2json(float arr[6][HISTORY]) {
+    String json = "[";
+    for (int i = 0; i < 6; ++i) {
         json += "[";
         for (int j = 0; j < HISTORY; ++j) {
-            json += String(acc_hist[i][(acc_i + j) % HISTORY]);
+            json += String(arr[i][(acc_i + j) % HISTORY]);
             if (j < HISTORY - 1) json += ", ";
         }
         json += "]";
-        if (i < 2) json += ", ";
+        if (i < 5) json += ", ";
     }
-    json += "] }";
+    json += "]";
+    return json;
+}
+
+void handleHistory() {
+    //String json = "{ \"rot\": [" + String(rot[0]) + ", " + String(rot[1]) + "] }";
+    String json = "{ "
+        "\"activity\": " + String(activity) + ", "
+        "\"acc\": " + history2json(acc_hist) + ", "
+        "\"dev\": " + history2json(acc_hist_dev) + ", "
+        "\"current_step\": " + String(current_step) + " }";
     server.sendHeader("Access-Control-Allow-Origin", "http://localhost");
     server.send(200, "application/json", json);
 }

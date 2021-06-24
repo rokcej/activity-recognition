@@ -32,18 +32,23 @@ float acc_err[3] = { 0.f };
 float gyro_err[3] = { 0.f };
 int led_count = 0;
 
-float acc_hist[3][HISTORY] = { 0.f };
+float acc_hist[6][HISTORY] = { 0.f };
+float acc_hist_dev[6][HISTORY] = { 0.f };
 int   acc_i = 0;
-float acc_mean[3] = { 0.f };
-float acc_dev[3]  = { 0.f };
 
+int activity = 0; // 0 = None, 1 = Walking, 2 = Jumping
+
+unsigned int current_step = 0; // Counter for history sync
 
 // Function declarations
 void setupServer();
 void loopServer();
 
 float rad2deg(float angle) {
-    return angle * 180.f / M_PI;                                
+    return angle * (180.f / M_PI);
+}
+float deg2rad(float angle) {
+    return angle * (M_PI / 180.f);  
 }
 
 void writeLed(int count) {
@@ -116,6 +121,7 @@ void updateLed() {
     writeLed(led_count);
 }
 
+
 void updateMain() {
   // Read IMUs
   float acc[3], ang_vel[3];
@@ -134,36 +140,81 @@ void updateMain() {
   for (int i = 0; i < 2; ++i)
     rot[i] = ALPHA * (rot[i] + ang_vel[i] * DT) + (1.f - ALPHA) * (rot_acc[i]);
 
-    // Record acc data
-    for (int i = 0; i < 3; ++i)
+
+//    // Correct acc data (remove G component)
+//    float roll = deg2rad(rot[0]);
+//    float pitch = deg2rad(rot[1]);
+//    float cos_pitch = cosf(pitch);
+//    float g_rel[3] = {
+//        -sinf(pitch),
+//        sinf(roll) * cos_pitch,
+//        cosf(roll) * cos_pitch
+//    };
+
+    // Get absolute acc (absolute directions, not absolute value)
+    float roll = deg2rad(rot[0]);
+    float pitch = deg2rad(rot[1]);
+    float sin_roll = sinf(roll);
+    float cos_roll = cosf(roll);
+    float sin_pitch = sinf(pitch);
+    float cos_pitch = cosf(pitch);
+    float acc_abs[3] = {
+         acc[0] * cos_pitch + acc[1] * sin_pitch * cos_roll + acc[2] * sin_pitch * cos_roll,
+                              acc[1] * cos_roll             - acc[2] * sin_roll,
+        -acc[0] * sin_pitch + acc[1] * cos_pitch * sin_roll + acc[2] * cos_pitch * cos_roll
+    };
+
+    // Save acc data
+    for (int i = 0; i < 3; ++i) {
         acc_hist[i][acc_i] = acc[i];
-    acc_i = (acc_i + 1) % HISTORY; // Update history head index
+        acc_hist[i+3][acc_i] = acc_abs[i];
+    }
 
     // Compute mean
-    float temp[3];
-    for (int i = 0; i < 3; ++i) {
-        temp[i] = 0.0;
+    float acc_mean[6] = { 0.f };
+    for (int i = 0; i < 6; ++i) {
+        acc_mean[i] = 0.0;
         for (int j = 0; j < HISTORY; ++j)
-            temp[i] += acc_hist[i][(acc_i + j) % HISTORY];
-        acc_mean[i] = temp[i] / (float)HISTORY;
+            acc_mean[i] += acc_hist[i][(acc_i + j) % HISTORY];
+        acc_mean[i] = acc_mean[i] / (float)HISTORY;
     }
     // Compute std dev
-    for (int i = 0; i < 3; ++i) {
-        temp[i] = 0.0;
+    float acc_dev[6]  = { 0.f };
+    for (int i = 0; i < 6; ++i) {
+        acc_dev[i] = 0.0;
         for (int j = 0; j < HISTORY; ++j) {
             float err = acc_hist[i][(acc_i + j) % HISTORY] - acc_mean[i];
-            temp[i] += err * err;
+            acc_dev[i] += err * err;
         }
-        acc_dev[i] = sqrtf(temp[i] / (float)HISTORY);
+        acc_dev[i] = sqrtf(acc_dev[i] / (float)HISTORY);
+    }
+
+    // Save dev data
+    for (int i = 0; i < 6; ++i)
+        acc_hist_dev[i][acc_i] = acc_dev[i];
+
+    // Recognize activity
+    float threshold_jump = 4.0;
+    float threshold_walk = 2.0;
+
+    float dev_forward = acc_dev[3];
+    float dev_right = acc_dev[4];
+    float dev_up = acc_dev[5];
+
+    if (dev_up >= threshold_jump) {
+        if (dev_up >= dev_forward && dev_up >= dev_right)
+            activity = 2; // Jump
+        else
+            activity = 1; // Walk
+    } else if (dev_forward >= threshold_walk || dev_right >= threshold_walk || dev_up >= threshold_walk) {
+        activity = 1; // Walk
+    } else {
+        activity = 0; // None
     }
     
-    for (int i = 0; i < 3; ++i) {
-        Serial.print(acc_dev[i]);
-        Serial.print("\t");
-    }
-    Serial.println();
-    
-    
+
+    acc_i = (acc_i + 1) % HISTORY; // Update history head index
+    ++current_step;
 }
 
 void setup() {

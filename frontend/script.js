@@ -358,70 +358,122 @@ function initWebGL() {
 	update();
 }
 
-
 function initGraphs() {
+	// Buttons
+	let modeOffset = 0;
+	function clickRel() {
+		modeOffset = 0;
+		document.getElementById("btnRel").classList.add("active")
+		document.getElementById("btnAbs").classList.remove("active")
+	}
+
+	function clickAbs() {
+		modeOffset = 3;
+		document.getElementById("btnAbs").classList.add("active")
+		document.getElementById("btnRel").classList.remove("active")
+	}
+
+	clickRel();
+	document.getElementById("btnRel").addEventListener("click", clickRel);
+	document.getElementById("btnAbs").addEventListener("click", clickAbs);
+
+	// Graphs
 	const labels = [];
 	for (let i = 0; i < 210; ++i) {
 		let t = (200 - i) / 20;
 		labels.push(-t);
 	}
-	const data = {
+	const dataAcc = {
 		labels: labels,
 		datasets: [
 			{
-				label: 'x-acceleration',
+				label: 'x',
 				backgroundColor: 'rgb(255, 99, 132)',
 				borderColor: 'rgb(255, 99, 132)',
 				data: new Array(201)
 			}, {
-				label: 'y-acceleration',
+				label: 'y',
 				backgroundColor: 'rgb(99, 255, 117)',
 				borderColor: 'rgb(99, 255, 117)',
 				data: new Array(201)
 			}, {
-				label: 'z-acceleration',
+				label: 'z',
 				backgroundColor: 'rgb(99, 141, 255)',
 				borderColor: 'rgb(99, 141, 255)',
 				data: new Array(201)
 			}
 		]
 	};
-	const config = {
+	const dataDev = {
+		labels: labels,
+		datasets: [
+			{
+				label: 'std_dev(x)',
+				backgroundColor: 'rgb(255, 99, 132)',
+				borderColor: 'rgb(255, 99, 132)',
+				data: new Array(201)
+			}, {
+				label: 'std_dev(y)',
+				backgroundColor: 'rgb(99, 255, 117)',
+				borderColor: 'rgb(99, 255, 117)',
+				data: new Array(201)
+			}, {
+				label: 'std_dev(z)',
+				backgroundColor: 'rgb(99, 141, 255)',
+				borderColor: 'rgb(99, 141, 255)',
+				data: new Array(201)
+			}
+		]
+	};
+	const configAcc = {
 		type: 'line',
-		data,
+		data: dataAcc,
 		options: {
 			responsive: false,
-			showXLabels: 10,
+			animation: { duration: 0 },
 			scales: {
 				y: {
-					title: {
-						text: "acceleration [m/s^2]",
-						display: true
-					},
-					min: -10,
+					title: { text: "acceleration [m/s^2]", display: true },
+					min: -15,
+					max: +15
+				},
+				x: {
+					title: { text: "time [s]", display: true },
+					display: true,
+					ticks: { maxTicksLimit: 11 }
+				}
+			},
+			elements: {	point: { radius: 0 } }
+		}
+	};
+	const configDev = {
+		type: 'line',
+		data: dataDev,
+		options: {
+			responsive: false,
+			animation: { duration: 0 },
+			scales: {
+				y: {
+					title: { text: "standard deviation", display: true },
+					min: -1,
 					max: +10
 				},
 				x: {
-					title: {
-						text: "time [s]",
-						display: true
-					},
+					title: { text: "time [s]", display: true	},
 					display: true,
-					ticks: {
-						maxTicksLimit: 11
-					}
+					ticks: { maxTicksLimit: 11 }
 				}
 			},
-			elements: {
-				point: {
-					radius: 0
-				}
-			}
+			elements: {	point: { radius: 0 } }
 		}
 	};
-	var myChart = new Chart(
-		document.getElementById('myChart'),
-		config
+	var chartAcc = new Chart(
+		document.getElementById('chart_acc'),
+		configAcc
+	);
+	var chartDev = new Chart(
+		document.getElementById('chart_dev'),
+		configDev
 	);
 
 	function getHistory() {
@@ -429,14 +481,33 @@ function initGraphs() {
 			.then(response => response.json())
 			.then(json => requestAnimationFrame(() => { updateGraphs(json) }));
 	}
+	
+	let last_step = 0;
+	const activities = ["None", "Walking", "Jumping"];
+	const spanActivity = document.getElementById("activity");
 
 	function updateGraphs(json) {
-		for (let i = 0; i < 3; ++i) {
-			let len = json["acc"][i].length;
-			data.datasets[i].data = data.datasets[i].data.slice(len).concat(json["acc"][i]);
+		spanActivity.textContent = activities[json["activity"]];
+
+		let len = json["acc"][0].length;
+		let off = json["current_step"] - last_step;
+		let pad = 0;
+		if (off > len) {
+			pad = Math.min(off - len, 201);
+			off = len;
 		}
+		for (let i = 0; i < 3; ++i) {
+			if (pad > 0) {
+				dataAcc.datasets[i].data = dataAcc.datasets[i].data.slice(pad).concat(new Array(pad));
+				dataDev.datasets[i].data = dataDev.datasets[i].data.slice(pad).concat(new Array(pad));
+			}
+			dataAcc.datasets[i].data = dataAcc.datasets[i].data.slice(off).concat(json["acc"][i+modeOffset].slice(-off));
+			dataDev.datasets[i].data = dataDev.datasets[i].data.slice(off).concat(json["dev"][i+modeOffset].slice(-off));
+		}
+		last_step = json["current_step"];
 		
-		myChart.update()
+		chartAcc.update()
+		chartDev.update()
 		setTimeout(getHistory, 100);
 	}
 

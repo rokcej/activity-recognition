@@ -2,17 +2,46 @@
 <head>
 	<title>Home (local)</title>
 	<meta charset="UTF-8">
-	<style></style>
+	<style>
+		html { background-color: #FFF; }
+		body { font-family: sans-serif; max-width: 1080px; margin: auto; padding: 0; background-color: #ecf0f1; color: #222 }
+		.header { background-color: #2c3e50; color: #ecf0f1; padding: 32px 24px; }
+		.main { margin: 0; padding: 32px 24px; }
+		.footer { font-size: 14px; text-align: center; margin: 0; padding: 2px; background-color: #dae1e3; color: #555; }
+		.button { background-color: #2879af; color: rgb(204, 204, 204); padding: 8px 12px; margin-right: 12px; display: inline-block; cursor: pointer; user-select: none; }
+		.button:hover { background-color: #48a5e4; color: #FFF; }
+		.active { background-color: #3498db; color: rgb(248, 248, 248); }
+		canvas { margin: auto; display: block; }
+		.activity { font-size: 22px; text-align: center; }
+		#activity { font-size: 32px; color: #3498db; }
+	</style>
 	<script type="text/javascript" src="script.js"></script>
 	<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-	<h2>Welcome to ESP8266</h2>
-    <p>Uptime: </p>
-    <p>User agent: </p>
-	<canvas id="canvas" width="640" height="360"></canvas>
-	<div>
-		<canvas id="myChart" width="480" height="360"></canvas>
+	<div class="header">
+		<h1>Welcome to ESP8266</h2>
+		<p>Uptime: </p>
+		<p>User agent: </p>
 	</div>
+	<div class="main">
+		<div>
+			<h2>Acceleration</h2>
+			<p class="activity">Activity:<br><span id="activity">...</span></p>
+			<p>
+				<span id="btnRel" class="button active">Show relative measurements</span><span id="btnAbs" class="button">Show absolute measurements</span>
+			</p>
+			<p>Relative measurements are the values obtained from the accelerometer.</p>
+			<p>Absolute measurements are transformed in such a way that z-axis always shows the vertical component of acceleration, while x-axis and y-axis always show the horizontal components of acceleration.</p>
+			<canvas id="chart_acc" width="960" height="360"></canvas>
+			<canvas id="chart_dev" width="960" height="240"></canvas>
+		</div>
+		<div>
+			<h2>Orientation</h2>
+			<p>The detected orientation of the board is displayed in real-time using WebGL.</p>
+			<canvas id="canvas" width="960" height="360"></canvas>
+		</div>
+	</div>
+	<p class="footer">Made by Rok Cej</p>
 </body>
 </html>
