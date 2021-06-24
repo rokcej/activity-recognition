@@ -1,5 +1,6 @@
 #include <Wire.h>
 #include <Ticker.h>
+#include <math.h>
 
 // WiFi
 #define NETWORK_SSID "Zoxx"
@@ -12,15 +13,16 @@
 #define ACCEL_XOUT_H 0x3B
 #define GYRO_XOUT_H 0x43
 
+#define HISTORY 40
+
 // Constants
 const float G = 9.80665f;
 
-const int FREQUENCY = 100;
+const int FREQUENCY = 20;
 const float TIME_CONSTANT = 1.f;
 
 const float DT = 1.f / FREQUENCY;
 const float ALPHA = TIME_CONSTANT / (TIME_CONSTANT + DT);
-
 
 // Global variables
 Ticker tickerMain;
@@ -30,6 +32,8 @@ float acc_err[3] = { 0.f };
 float gyro_err[3] = { 0.f };
 int led_count = 0;
 
+float acc_hist[3][HISTORY] = { 0.f };
+int   acc_i = 0;
 
 
 // Function declarations
@@ -111,6 +115,7 @@ void updateLed() {
 }
 
 void updateMain() {
+  // Read IMUs
   float acc[3], ang_vel[3];
   readAcc(acc);
   readGyro(ang_vel);
@@ -119,13 +124,45 @@ void updateMain() {
     ang_vel[i] += gyro_err[i];
   }
 
+  // Get orientation
   float rot_acc[2] = {
     rad2deg(atan2f(acc[1], acc[2])), // Roll
     rad2deg(atan2f(-acc[0], sqrtf(acc[1] * acc[1] + acc[2] * acc[2]))) // Pitch
   };
-
   for (int i = 0; i < 2; ++i)
     rot[i] = ALPHA * (rot[i] + ang_vel[i] * DT) + (1.f - ALPHA) * (rot_acc[i]);
+
+    // Record acc data
+    for (int i = 0; i < 3; ++i)
+        acc_hist[i][acc_i] = acc[i];
+    acc_i = (acc_i + 1) % HISTORY; // Update history head index
+
+    // Compute mean
+    float acc_mean[3];
+    for (int i = 0; i < 3; ++i) {
+        acc_mean[i] = 0.0;
+        for (int j = 0; j < HISTORY; ++j)
+            acc_mean[i] += acc_hist[i][(acc_i + j) % HISTORY];
+        acc_mean[i] = acc_mean[i] / (float)HISTORY;
+    }
+    // Compute std dev
+    float acc_dev[3];
+    for (int i = 0; i < 3; ++i) {
+        acc_dev[i] = 0.0;
+        for (int j = 0; j < HISTORY; ++j) {
+            float err = acc_hist[i][(acc_i + j) % HISTORY] - acc_mean[i];
+            acc_dev[i] += err * err;
+        }
+        acc_dev[i] = sqrtf(acc_dev[i] / (float)HISTORY);
+    }
+    
+    for (int i = 0; i < 3; ++i) {
+        Serial.print(acc_dev[i]);
+        Serial.print("\t");
+    }
+    Serial.println();
+    
+    
 }
 
 void setup() {
