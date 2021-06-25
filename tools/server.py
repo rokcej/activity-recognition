@@ -1,3 +1,5 @@
+# This is only used during frontend development
+
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 import sys
 

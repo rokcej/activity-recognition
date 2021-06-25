@@ -16,9 +16,9 @@
 #define HISTORY 40
 
 // Constants
-const float G = 9.80665f;
+const float G = 9.80665f; // Gravity
 
-const int FREQUENCY = 20;
+const int FREQUENCY = 20; // Number of readings per second
 const float DT = 1.f / FREQUENCY;
 // Complementary filter for rotation
 const float COMP_TIME_CONSTANT = 1.f;
@@ -28,24 +28,25 @@ const float COMP_ALPHA = COMP_TIME_CONSTANT / (COMP_TIME_CONSTANT + DT);
 // Global variables
 Ticker tickerMain;
 Ticker tickerLed;
-float rot[2] = { 0.f };
-float acc_err[3] = { 0.f };
-float gyro_err[3] = { 0.f };
+float rot[2] = { 0.f }; // Board roll and pitch, respectively
+float acc_err[3] = { 0.f }; // Acceleration error
+float gyro_err[3] = { 0.f }; // Gyroscope error
 int led_count = 0;
 
-float acc_hist[6][HISTORY] = { 0.f };
-float acc_hist_dev[6][HISTORY] = { 0.f };
+float acc_hist[6][HISTORY] = { 0.f }; // Past acceleration data
+float acc_hist_dev[6][HISTORY] = { 0.f }; // Past standard deviation data
 int   acc_i = 0; // History head index
 
 int activity = 0; // 0 = None, 1 = Walking, 2 = Jumping
 
 unsigned int current_step = 0; // Counter for history sync
-bool first_step = false;
+bool first_step = false; // Flag for first step
 
 // Function declarations
 void setupServer();
 void loopServer();
 
+// Radian-degree conversion
 float rad2deg(float angle) {
     return angle * (180.f / M_PI);
 }
@@ -53,6 +54,7 @@ float deg2rad(float angle) {
     return angle * (M_PI / 180.f);  
 }
 
+// Turn on/off LEDs
 void writeLed(int count) {
     uint8_t val = 0;
     for (int i = 0; i < count; ++i)
@@ -62,12 +64,14 @@ void writeLed(int count) {
     Wire.endTransmission();
 }
 
+// Calibrate accelerometer and gyroscope
 void calibrate() {
     for (int i = 0; i < 3; ++i) {
         acc_err[i] = 0.f;
         gyro_err[i] = 0.f;
     }
 
+    Serial.print("Make sure that the board is in a horizontal position during calibration!");
     Serial.print("Calibrating, please don't move the board for a few seconds... ");
     int samples = 300;
     int frequency = 100;
@@ -94,6 +98,7 @@ void calibrate() {
     acc_err[2] += G;
 }
 
+// Read accelerometer IMU data
 void readAcc(float acc[3]) {
   Wire.beginTransmission(I2C_ADD_MPU);
   Wire.write(ACCEL_XOUT_H);
@@ -106,6 +111,7 @@ void readAcc(float acc[3]) {
   }
 }
 
+// Read gyroscope IMU data
 void readGyro(float ang_vel[3]) {
   Wire.beginTransmission(I2C_ADD_MPU);
   Wire.write(GYRO_XOUT_H);
@@ -118,12 +124,13 @@ void readGyro(float ang_vel[3]) {
   }
 }
 
+// LED animation
 void updateLed() {
     led_count = led_count % 4 + 1;
     writeLed(led_count);
 }
 
-
+// Main function for activity recognition
 void updateMain() {
     // Read IMUs
     float acc[3], ang_vel[3];
@@ -167,7 +174,6 @@ void updateMain() {
                               acc[1] * cos_roll             - acc[2] * sin_roll,
         -acc[0] * sin_pitch + acc[1] * cos_pitch * sin_roll + acc[2] * cos_pitch * cos_roll
     };
-
     // Save acc data
     for (int i = 0; i < 3; ++i) {
         acc_hist[i][acc_i] = acc[i];
@@ -193,8 +199,7 @@ void updateMain() {
         }
         acc_dev[i] = sqrtf(acc_dev[i] / (float)HISTORY);
     }
-
-    // Save dev data
+    // Save std dev data
     for (int i = 0; i < 6; ++i)
         acc_hist_dev[i][acc_i] = acc_dev[i];
 
@@ -238,30 +243,30 @@ void updateMain() {
 }
 
 void setup() {
-  // Initialize serial communication
-  Serial.begin(115200);
-  while (!Serial) {
-    delay(100);
-  }
-  delay(500);
-
-  // Initialize I2C
-  Wire.begin(12, 14); // SDA = 12, SCL = 14
-  Wire.setClock(100000); // 100kHz
-
-  tickerLed.attach_ms(500, updateLed); // Start loading animation
-
-  // Init server
-  setupServer();
-
-  // Run activity recognition
-  calibrate();
-  tickerMain.attach_ms(1000 / FREQUENCY, updateMain);
-  
-  tickerLed.detach(); // Stop loading animation
-  writeLed(0);
+    // Initialize serial communication
+    Serial.begin(115200);
+    while (!Serial) {
+        delay(100);
+    }
+    delay(500);
+    
+    // Initialize I2C
+    Wire.begin(12, 14); // SDA = 12, SCL = 14
+    Wire.setClock(100000); // 100kHz
+    
+    tickerLed.attach_ms(500, updateLed); // Start loading LED animation
+    
+    // Init server
+    setupServer();
+    
+    // Run activity recognition
+    calibrate();
+    tickerMain.attach_ms(1000 / FREQUENCY, updateMain);
+    
+    tickerLed.detach(); // Stop loading LED animation
+    writeLed(0);
 }
 
 void loop() {
-  loopServer();
+    loopServer();
 }

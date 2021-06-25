@@ -1,7 +1,7 @@
-import sys
-
 # Use this to minify the code first:
 # https://javascript-minifier.com/
+
+import sys
 
 if __name__ == "__main__":
 	if len(sys.argv) < 2:

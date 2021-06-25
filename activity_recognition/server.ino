@@ -41,16 +41,19 @@ void handleRoot() {
     server.send(200, "text/html", html);
 }
 
+// Get javascript code
 void handleScript() {
     server.send(200, "application/javascript", frontend_script);
 }
 
+// Get orientation data
 void handleData() {
     String json = "{ \"rot\": [" + String(rot[0]) + ", " + String(rot[1]) + "] }";
     server.sendHeader("Access-Control-Allow-Origin", "http://localhost");
     server.send(200, "application/json", json);
 }
 
+// Convert 2D array to JSON string
 String history2json(float arr[6][HISTORY]) {
     String json = "[";
     for (int i = 0; i < 6; ++i) {
@@ -66,6 +69,7 @@ String history2json(float arr[6][HISTORY]) {
     return json;
 }
 
+// Get history data
 void handleHistory() {
     //String json = "{ \"rot\": [" + String(rot[0]) + ", " + String(rot[1]) + "] }";
     String json = "{ "
@@ -77,6 +81,7 @@ void handleHistory() {
     server.send(200, "application/json", json);
 }
 
+// Page not found
 void handleNotFound() {
     String body ="<h2>404 - Page not found</h2>\n"
         "<p>Click <a href=\"/\">here</a> to go to the main page</p>\n";
@@ -84,6 +89,7 @@ void handleNotFound() {
     server.send(404, "text/html", html);
 }
 
+// WiFi access point setup
 void setupWiFiAP() {
     Serial.print("Setting up access point... ");
     WiFi.mode(WIFI_AP);
@@ -92,7 +98,7 @@ void setupWiFiAP() {
     Serial.print("Local IP: ");
     Serial.println(WiFi.softAPIP());
 }
-
+// WiFi station setup
 void setupWiFiSTA() {
     Serial.print("Connecting to access point... ");
     WiFi.mode(WIFI_STA);
@@ -106,13 +112,14 @@ void setupWiFiSTA() {
 }
 
 void setupServer() {
-    
+    // Set-up / connect to WiFi
 #if NETWORK_MODE == 0
     setupWiFiAP();
 #else if NETWORK_MODE == 1
     setupWiFiSTA();
 #endif
 
+    // HTTP request handlers
     server.on("/", handleRoot);
     server.on("/data", handleData);
     server.on("/history", handleHistory);

@@ -1,6 +1,7 @@
 const DATA_URL = "http://192.168.100.33/data";
 const HISTORY_URL = "http://192.168.100.33/history";
 
+// WebGL vertex shader source code
 const vsSource = `#version 300 es
 	in vec3 aPos;
 	in vec3 aNorm;
@@ -19,7 +20,7 @@ const vsSource = `#version 300 es
 		vNorm = mat3(transpose(inverse(uMMat))) * aNorm;
 	}
 `;
-
+// WebGL fragment shader source code
 const fsSource = `#version 300 es
 	precision highp float;
 
@@ -73,6 +74,7 @@ const fsSource = `#version 300 es
 	}	
 `;
 
+// Compile a WebGL shader
 function createShader(gl, type, source) {
 	const shader = gl.createShader(type);
 	gl.shaderSource(shader, source);
@@ -84,7 +86,7 @@ function createShader(gl, type, source) {
 	}
 	return shader;
 }
-
+// Create a WebGL program
 function createProgram(gl, vertexShader, fragmentShader) {
 	const program = gl.createProgram();
 	gl.attachShader(program, vertexShader);
@@ -98,8 +100,8 @@ function createProgram(gl, vertexShader, fragmentShader) {
 	return program;
 }
 
-// WebGL matrices are column-major
-
+// Matrix functions
+// N.B. WebGL matrices are column-major
 function normalizeVector(v) {
 	const invLen = 1.0 / Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
 	v[0] *= invLen;
@@ -230,6 +232,7 @@ function multiplyMatrix(A, B, out) {
 	return out;
 }
 
+// Setup WebGL
 function initWebGL() {
 	const canvas = document.getElementById("canvas");
 	const gl = canvas.getContext("webgl2") || canvas.getContext("webgl");
@@ -358,6 +361,7 @@ function initWebGL() {
 	update();
 }
 
+// Setup graphs
 function initGraphs() {
 	// Buttons
 	let modeOffset = 0;
