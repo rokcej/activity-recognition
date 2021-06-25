@@ -3,9 +3,9 @@
 #include <math.h>
 
 // WiFi
-#define NETWORK_SSID "Rok Cej"
-#define NETWORK_PASSWORD ""
-#define NETWORK_MODE 0 // Access point = 0 (Create new WiFi), Station = 1 (Connect to existing WiFi)
+#define NETWORK_SSID "Zoxx"
+#define NETWORK_PASSWORD "09889576"
+#define NETWORK_MODE 1 // Access point = 0 (Create new WiFi), Station = 1 (Connect to existing WiFi)
 
 // MPU-9250
 #define I2C_ADD_PCF 0x20 // PCF8574AN I2C Address
