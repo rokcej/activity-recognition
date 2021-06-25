@@ -20,9 +20,14 @@ const float G = 9.80665f; // Gravity
 
 const int FREQUENCY = 20; // Number of readings per second
 const float DT = 1.f / FREQUENCY;
+
 // Complementary filter for rotation
 const float COMP_TIME_CONSTANT = 1.f;
 const float COMP_ALPHA = COMP_TIME_CONSTANT / (COMP_TIME_CONSTANT + DT);
+
+// Activity detection
+const float THRESHOLD_JUMP = 4.0;
+const float THRESHOLD_WALK = 1.0;
 
 
 // Global variables
@@ -71,7 +76,7 @@ void calibrate() {
         gyro_err[i] = 0.f;
     }
 
-    Serial.print("Make sure that the board is in a horizontal position during calibration!");
+    Serial.println("Make sure that the board is in a horizontal position during calibration!");
     Serial.print("Calibrating, please don't move the board for a few seconds... ");
     int samples = 300;
     int frequency = 100;
@@ -203,24 +208,25 @@ void updateMain() {
     for (int i = 0; i < 6; ++i)
         acc_hist_dev[i][acc_i] = acc_dev[i];
 
-
     // Recognize activity
-    float threshold_jump = 4.0;
-    float threshold_walk = 2.0;
+    float dev_forward = acc_dev[3];
+    float dev_right = acc_dev[4];
+    float dev_up = acc_dev[5]; // Vertical std dev component
+    float dev_horizontal = sqrtf(dev_forward*dev_forward + dev_right*dev_right); // Horizontal std dev component
 
-    float dev_forward = acc_dev[3]; // Horizontal component (forward)
-    float dev_right = acc_dev[4]; // Horizontal component (right)
-    float dev_up = acc_dev[5]; // Vertical component (up)
-    float dev_horizontal = sqrtf(dev_forward*dev_forward + dev_right*dev_right);
+//    float mean_forward = acc_mean[3];
+//    float mean_right = acc_mean[4];
+//    float mean_up = fabsf(acc_mean[5] - G); // Vertical mean component
+//    float mean_horizontal = sqrtf(mean_forward*mean_forward + mean_right*mean_right); // Horizontal mean component
 
     int activity_old = activity;
     
-    if (dev_up >= threshold_jump) {
-        if (dev_up >= dev_forward && dev_up >= dev_right)
+    if (dev_up >= THRESHOLD_JUMP) {
+        if (dev_up >= dev_horizontal)
             activity = 2; // Jump
         else
             activity = 1; // Walk
-    } else if (dev_horizontal >= threshold_walk) {
+    } else if (dev_horizontal >= THRESHOLD_WALK) {
         activity = 1; // Walk
     } else {
         activity = 0; // None
